@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ACS ASAP Reader
 // @namespace    weihuang.acs
-// @version      1.1.0
-// @description  Restore graphical abstracts + inline abstracts on ACS (JACS etc.) ASAP / TOC / search list pages, with compact view, keyword filter, highlight and one-click Zotero save.
+// @version      1.2.0
+// @description  Restore graphical abstracts + inline abstracts on ACS (JACS etc.) ASAP / TOC / search list pages, with compact view, keyword filter, highlight, one-click Zotero save and a bilingual (EN/中文) UI.
 // @author       weihuang
 // @match        https://pubs.acs.org/*
 // @run-at       document-idle
@@ -36,7 +36,48 @@
     showAbs: LS.get('showAbs', true),
     keywords: LS.get('keywords', ['enzyme', 'biocatalysis', 'protein design', 'catalysis']),
     cols: LS.get('cols', 'auto'),         // 'auto' | '1'..'5', grid view only
+    // First run follows the browser; after that the toolbar toggle wins.
+    lang: LS.get('lang', /^zh/i.test(navigator.language || '') ? 'zh' : 'en'),
     query: '',
+  };
+
+  // ----------------------------------------------------------------- i18n
+  const I18N = {
+    zh: {
+      other: 'EN', otherTitle: 'Switch to English',
+      grid: '卡片', compact: '列表',
+      colsTitle: '卡片视图的列数', colsAuto: '自动列数', colsN: n => `${n} 列`,
+      abs: '摘要', kw: '关键词',
+      all: '全部加载', allTitle: '抓取本页全部文章的摘要，让过滤能搜到摘要正文',
+      loading: (d, t) => `加载中 ${d}/${t}`,
+      filterPh: '过滤：标题/作者/摘要（空格 = AND）',
+      kwLabel: '高亮词（逗号分隔）：',
+      count: (n, t) => `${n} / ${t} 篇`,
+      zotAdd: '+ Zotero', zotOk: '✓ 已入库', zotOkScraped: '✓ 已入库*', zotFail: '✗ 失败',
+      zotViaCrossref: 'CrossRef 元数据',
+      zotViaPage: 'CrossRef 尚未收录此 DOI，元数据取自页面，已打 metadata-unverified 标签待核',
+      zotErr: e => `Zotero 没在运行？先打开 Zotero 桌面版再试。(${e})`,
+    },
+    en: {
+      other: '中', otherTitle: '切换到中文',
+      grid: 'Cards', compact: 'List',
+      colsTitle: 'Columns in card view', colsAuto: 'Auto columns',
+      colsN: n => `${n} column${n === '1' ? '' : 's'}`,
+      abs: 'Abstracts', kw: 'Keywords',
+      all: 'Load all', allTitle: 'Fetch every abstract on this page so the filter can search their full text',
+      loading: (d, t) => `Loading ${d}/${t}`,
+      filterPh: 'Filter: title / authors / abstract (space = AND)',
+      kwLabel: 'Highlight terms (comma-separated):',
+      count: (n, t) => `${n} / ${t} papers`,
+      zotAdd: '+ Zotero', zotOk: '✓ Saved', zotOkScraped: '✓ Saved*', zotFail: '✗ Failed',
+      zotViaCrossref: 'Metadata from CrossRef',
+      zotViaPage: 'DOI not in CrossRef yet; metadata scraped from the page and tagged metadata-unverified',
+      zotErr: e => `Is Zotero running? Open the Zotero desktop app and retry. (${e})`,
+    },
+  };
+  const t = (k, ...a) => {
+    const v = I18N[state.lang][k];
+    return typeof v === 'function' ? v(...a) : v;
   };
 
   // Cached article payloads live under one key so pruning is a single write.
@@ -152,32 +193,58 @@
 
   const bar = document.createElement('div');
   bar.className = 'asap-bar';
-  bar.innerHTML = `
-    <button data-view="grid">卡片</button>
-    <button data-view="compact">列表</button>
-    <select data-act="cols" title="卡片视图的列数">
-      <option value="auto">自动列数</option>
-      <option value="1">1 列</option>
-      <option value="2">2 列</option>
-      <option value="3">3 列</option>
-      <option value="4">4 列</option>
-      <option value="5">5 列</option>
-    </select>
-    <span class="asap-sep"></span>
-    <button data-act="abs">摘要</button>
-    <button data-act="kw">关键词</button>
-    <button data-act="all" title="抓取本页全部文章的摘要，让过滤能搜到摘要正文">全部加载</button>
-    <span class="asap-sep"></span>
-    <input type="text" data-act="filter" placeholder="过滤：标题/作者/摘要（空格 = AND）">
-    <span class="asap-count"></span>
-    <div class="asap-kw-row">
-      <span style="color:#5a6472">高亮词（逗号分隔）：</span>
-      <input type="text" data-act="kwlist" value="${state.keywords.join(', ').replace(/"/g, '&quot;')}">
-    </div>`;
   listGroup.insertBefore(bar, listGroup.firstChild);
 
-  const countEl = bar.querySelector('.asap-count');
-  const filterInput = bar.querySelector('[data-act=filter]');
+  let countEl, filterInput, colsSelect;
+
+  const esc = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+  // Rebuilt wholesale on a language switch, so it carries the live values over.
+  function renderBar() {
+    const kwOpen = bar.querySelector('.asap-kw-row')?.classList.contains('open');
+    bar.innerHTML = `
+      <button data-view="grid">${esc(t('grid'))}</button>
+      <button data-view="compact">${esc(t('compact'))}</button>
+      <select data-act="cols" title="${esc(t('colsTitle'))}">
+        <option value="auto">${esc(t('colsAuto'))}</option>
+        ${['1', '2', '3', '4', '5'].map(n => `<option value="${n}">${esc(t('colsN', n))}</option>`).join('')}
+      </select>
+      <span class="asap-sep"></span>
+      <button data-act="abs">${esc(t('abs'))}</button>
+      <button data-act="kw">${esc(t('kw'))}</button>
+      <button data-act="all" title="${esc(t('allTitle'))}">${esc(t('all'))}</button>
+      <button data-act="lang" title="${esc(t('otherTitle'))}">${esc(t('other'))}</button>
+      <span class="asap-sep"></span>
+      <input type="text" data-act="filter" placeholder="${esc(t('filterPh'))}" value="${esc(state.query)}">
+      <span class="asap-count"></span>
+      <div class="asap-kw-row${kwOpen ? ' open' : ''}">
+        <span style="color:#5a6472">${esc(t('kwLabel'))}</span>
+        <input type="text" data-act="kwlist" value="${esc(state.keywords.join(', '))}">
+      </div>`;
+
+    countEl = bar.querySelector('.asap-count');
+    filterInput = bar.querySelector('[data-act=filter]');
+    colsSelect = bar.querySelector('[data-act=cols]');
+    colsSelect.value = state.cols;
+
+    filterInput.addEventListener('input', debounce(() => {
+      state.query = filterInput.value.trim().toLowerCase();
+      applyFilter();
+    }, 180));
+
+    bar.querySelector('[data-act=kwlist]').addEventListener('input', debounce((e) => {
+      state.keywords = e.target.value.split(',').map(x => x.trim()).filter(Boolean);
+      LS.set('keywords', state.keywords);
+      cards.forEach(markKeywords);
+      applyFilter();
+    }, 400));
+
+    colsSelect.addEventListener('change', () => {
+      state.cols = colsSelect.value;
+      LS.set('cols', state.cols);
+      applyView();
+    });
+  }
 
   bar.addEventListener('click', (e) => {
     const b = e.target.closest('button');
@@ -186,7 +253,19 @@
     else if (b.dataset.act === 'abs') { state.showAbs = !state.showAbs; LS.set('showAbs', state.showAbs); applyView(); }
     else if (b.dataset.act === 'kw') { bar.querySelector('.asap-kw-row').classList.toggle('open'); }
     else if (b.dataset.act === 'all') { loadAll(b); }
+    else if (b.dataset.act === 'lang') {
+      state.lang = state.lang === 'zh' ? 'en' : 'zh';
+      LS.set('lang', state.lang);
+      applyLang();
+    }
   });
+
+  function applyLang() {
+    renderBar();
+    applyView();
+    applyFilter();
+    document.querySelectorAll('button.asap-zot').forEach(labelZotButton);
+  }
 
   // The filter can only match abstract text that has actually been fetched, so
   // offer an explicit "load everything on this page" escape hatch.
@@ -197,32 +276,12 @@
     let done = 0;
     const tick = () => {
       done++;
-      btn.textContent = `加载中 ${done}/${pending.length}`;
-      if (done === pending.length) { btn.textContent = '全部加载'; btn.disabled = false; applyFilter(); }
+      btn.textContent = t('loading', done, pending.length);
+      if (done === pending.length) { btn.textContent = t('all'); btn.disabled = false; applyFilter(); }
     };
     for (const c of pending) { io.unobserve(c.box); queue.push(() => load(c).then(tick)); }
     pump();
   }
-
-  filterInput.addEventListener('input', debounce(() => {
-    state.query = filterInput.value.trim().toLowerCase();
-    applyFilter();
-  }, 180));
-
-  bar.querySelector('[data-act=kwlist]').addEventListener('input', debounce((e) => {
-    state.keywords = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
-    LS.set('keywords', state.keywords);
-    cards.forEach(markKeywords);
-    applyFilter();
-  }, 400));
-
-  const colsSelect = bar.querySelector('[data-act=cols]');
-  colsSelect.value = state.cols;
-  colsSelect.addEventListener('change', () => {
-    state.cols = colsSelect.value;
-    LS.set('cols', state.cols);
-    applyView();
-  });
 
   function applyView() {
     document.body.classList.toggle('asap-grid', state.view === 'grid');
@@ -416,11 +475,31 @@
     try { return JSON.parse(r.responseText).message; } catch (e) { return null; }
   }
 
+  // Label is derived from state so a language switch can relabel buttons that
+  // already show a result, without losing that result.
+  function labelZotButton(btn) {
+    const st = btn.dataset.state || 'idle';
+    if (st === 'busy') { btn.textContent = '…'; btn.title = ''; return; }
+    if (st === 'ok') {
+      const scraped = btn.dataset.via === 'page';
+      btn.textContent = scraped ? t('zotOkScraped') : t('zotOk');
+      btn.title = scraped ? t('zotViaPage') : t('zotViaCrossref');
+      return;
+    }
+    if (st === 'err') {
+      btn.textContent = t('zotFail');
+      btn.title = t('zotErr', btn.dataset.err || '');
+      return;
+    }
+    btn.textContent = t('zotAdd');
+    btn.title = '';
+  }
+
   async function saveToZotero(card, btn) {
     if (!GM_HTTP) return;
     btn.disabled = true;
-    btn.textContent = '…';
-    btn.title = '';
+    btn.dataset.state = 'busy';
+    labelZotButton(btn);
 
     // Make sure the abstract is on hand before building the item.
     if (!card.loaded) { io.unobserve(card.box); await load(card); }
@@ -442,16 +521,16 @@
         data: JSON.stringify({ items: [item], uri: item.url, sessionID: newSessionID() }),
       });
       if (r.status !== 201) throw new Error('HTTP ' + r.status);
-      btn.textContent = viaCrossref ? '✓ 已入库' : '✓ 已入库*';
+      btn.dataset.state = 'ok';
+      btn.dataset.via = viaCrossref ? 'crossref' : 'page';
       btn.className = 'asap-zot ok';
-      btn.title = viaCrossref
-        ? 'CrossRef 元数据'
-        : 'CrossRef 尚未收录此 DOI，元数据取自页面，已打 metadata-unverified 标签待核';
+      labelZotButton(btn);
     } catch (e) {
       btn.disabled = false;
-      btn.textContent = '✗ 失败';
+      btn.dataset.state = 'err';
+      btn.dataset.err = e.message;
       btn.className = 'asap-zot err';
-      btn.title = 'Zotero 没在运行？先打开 Zotero 桌面版再试。(' + e.message + ')';
+      labelZotButton(btn);
     }
   }
 
@@ -463,7 +542,8 @@
     wrap.className = 'item';
     const btn = document.createElement('button');
     btn.className = 'asap-zot';
-    btn.textContent = '+ Zotero';
+    btn.dataset.state = 'idle';
+    labelZotButton(btn);
     btn.addEventListener('click', (e) => { e.preventDefault(); saveToZotero(card, btn); });
     wrap.appendChild(btn);
     host.appendChild(wrap);
@@ -524,11 +604,12 @@
   function applyFilter() {
     let n = 0;
     for (const c of cards) if (applyFilterTo(c)) n++;
-    countEl.textContent = `${n} / ${cards.length} 篇`;
+    countEl.textContent = t('count', n, cards.length);
   }
 
   cards.forEach(markKeywords);
   cards.forEach(addZoteroButton);
+  renderBar();
   applyView();
   applyFilter();
 })();
