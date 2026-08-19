@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         ACS ASAP Reader
-// @namespace    weihuang.acs
-// @version      1.2.1
+// @namespace    github.com/Wei952766
+// @version      1.2.2
 // @description  Restore graphical abstracts + inline abstracts on ACS (JACS etc.) ASAP / TOC / search list pages, with compact view, keyword filter, highlight, one-click Zotero save and a bilingual (EN/中文) UI.
-// @author       weihuang
+// @author       Wei952766
 // @match        https://pubs.acs.org/*
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest

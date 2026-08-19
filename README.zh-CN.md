@@ -65,43 +65,45 @@ ACS Catalysis、Nano Letters、ACS Nano 等**所有 ACS 期刊**的 ASAP 页、
 
 ## Zotero 一键入库
 
-要求 **Zotero 桌面版正在运行**（脚本打 `http://127.0.0.1:23119/connector/saveItems`，
-和 Zotero 浏览器插件是同一个端点）。
+需要 **Zotero 桌面版正在运行**。脚本打的是 `/connector/saveItems`，和 Zotero
+浏览器插件同一个端点。
 
-元数据两条路，自动选择：
+元数据优先取 CrossRef。CrossRef 收录 ASAP 的 DOI **有 1–3 天延迟**，未收录时改用
+列表页的标题/作者/日期建条目，按钮显示 `✓ 已入库*` 并打 **`metadata-unverified`**
+标签待核（作者按"最后一个词是姓"切分，复姓会错）。CrossRef 的 ACS 摘要常缺失，
+一律用页面抓到的摘要补上。
 
-1. **CrossRef**（优先）— 权威元数据。CrossRef 的 ACS 摘要经常缺失，缺时自动用页面上抓到的摘要补。
-2. **页面抓取**（兜底）— CrossRef 注册 ASAP 的 DOI **有 1–3 天延迟**，最新几天的文章查 CrossRef 会 404。
-   这时改用列表页的标题/作者/日期 + 抓到的摘要建条目，按钮显示 `✓ 已入库*`，条目额外打
-   **`metadata-unverified`** 标签提醒你事后核对（作者姓名按"最后一个词是姓"切分，复姓会切错）。
+列表页批量扫读用这个按钮；想要含 PDF 和快照的完整元数据，在单篇文章页用 Zotero 插件。
 
-### 为什么不直接复用 Zotero 插件的路径
+<details>
+<summary><b>为什么不复用 Zotero 插件的路径</b></summary>
 
-调查过，结论是**已经是同一条路**了 —— 用的就是插件那个 `/connector/saveItems` 端点。差别只在元数据从哪来：
+已经是同一条路了——用的就是插件那个 `/connector/saveItems` 端点，差别只在元数据来源。
 
-- 插件在页面里跑站点专用 translator。问 Zotero `getTranslators`：**文章页**匹配到
-  `Silverchair` / `Atypon Journals` 两个专用 translator，插件在单篇页面上很好用；
-  但 **ASAP 列表页一个专用 translator 都没匹配**（只有 unAPI / COinS / Embedded Metadata / DOI
-  这些通用兜底），因为新版 ACS 把 `citation_*`、`dc.*` meta 标签和 JSON-LD 全删了。
-  列表页上插件只能退化成 DOI translator → 查 CrossRef → 撞上同样的延迟。
-- 跑 translator 需要插件自带的 `Zotero.Translate` 沙箱环境，用户脚本里没法复刻。
-- ACS 自家的 RIS 导出（`/Citation/Download`）被 Cloudflare 拦成 403，这条捷径也是死的。
+插件靠站点专用 translator。问 Zotero `getTranslators`：**文章页**能匹配到
+`Silverchair` / `Atypon Journals`，插件在那儿很好用；但 **ASAP 列表页一个都匹配不到**
+（只剩 unAPI / COinS / Embedded Metadata / DOI 这些通用兜底），因为新版 ACS 把
+`citation_*`、`dc.*` meta 标签和 JSON-LD 全删了——插件在列表页只能退化成
+DOI translator → 查 CrossRef → 撞上同样的延迟。
 
-所以列表页批量扫读用这个按钮，想要最完整的元数据（含 PDF、快照）就在单篇文章页用 Zotero 插件。
+跑 translator 需要插件自带的 `Zotero.Translate` 沙箱，用户脚本复刻不了；
+ACS 自家的 RIS 导出（`/Citation/Download`）又被 Cloudflare 拦成 403。
 
-### 三个实测出来的坑
+</details>
 
-- **带 `Origin` 的请求必须同时发 `X-Zotero-Connector-API-Version`**。
-  否则 Zotero 直接掐断连接——这是它阻止任意网站写入文献库的安全闸门。
-  `GM_xmlhttpRequest` 总会附带 `Origin`，缺这个头就每次都以 `network` 错误告终，
-  换任何其他自定义头都无效。注意用 `curl` 测这个端点会误导：curl 不带 `Origin`，
-  永远返回 201，从而掩盖真实浏览器必然遇到的失败。
+<details>
+<summary><b>从网页调 connector 的三个坑</b></summary>
 
-- **`sessionID` 必须每次唯一**。Zotero 把它当保存会话标识，复用同一个 ID 第二次提交直接返回
-  409 且**静默丢弃条目**。脚本里每次生成新 ID。
-  （注意：`~/bin/zotero-add` 第 172 行把 sessionID 写死成 `"zotero-add-cli"`，同样的问题。）
-- **刚启动 Zotero 的头 1–2 分钟不要存**。connector 在数据库就绪前就会回 201，
-  这段窗口里的保存会静默丢失。实测等 Zotero 完全起来后连存 3 条，3/3 成功。
+- **带 `Origin` 的请求必须同时发 `X-Zotero-Connector-API-Version`**，否则 Zotero
+  直接掐断连接——这是它阻止任意网站写入文献库的安全闸门。`GM_xmlhttpRequest` 必然
+  附带 `Origin`，缺这个头就每次以 `network` 错误告终，换任何其他自定义头都无效。
+  用 `curl` 测会误导：curl 不带 `Origin`，永远返回 201，掩盖真实浏览器必然遇到的失败。
+- **`sessionID` 必须每次唯一**。Zotero 把它当保存会话标识，复用同一个 ID 第二次提交
+  返回 409 且**静默丢弃条目**。
+- **刚启动 Zotero 的头 1–2 分钟不要存**：connector 在数据库就绪前就会回 201，
+  这段窗口里的保存会静默丢失。
+
+</details>
 
 ## 实现说明
 
@@ -130,4 +132,4 @@ ACS Catalysis、Nano Letters、ACS Nano 等**所有 ACS 期刊**的 ASAP 页、
 
 ## License
 
-[MIT](LICENSE) © Wei Huang
+[MIT](LICENSE) © Wei952766

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.2 — 2026-08-19
+
+- 精简 README 的 Zotero 章节：要点直给，调查过程与踩坑记录收进折叠块。
+- 移除脚本与文档中的个人身份信息。**`@namespace` 已从 `weihuang.acs` 改为
+  `github.com/Wei952766`** —— Tampermonkey 以 `@name + @namespace` 标识脚本，
+  因此这一版会被视为新脚本：请先删除旧的 “ACS ASAP Reader”，再从
+  README 的一键安装链接重新安装，否则会同时存在两份、在同一页面重复运行。
+
 ## 1.2.1 — 2026-08-19
 
 - **修复 Zotero 入库在真实 Tampermonkey 下必然失败**。Zotero connector 会掐断

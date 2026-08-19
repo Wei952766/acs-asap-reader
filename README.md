@@ -85,58 +85,54 @@ View, column count, abstract visibility, keyword list and language persist in
 
 ## Zotero saving
 
-Requires the **Zotero desktop app to be running** — the script posts to
-`http://127.0.0.1:23119/connector/saveItems`, the same endpoint the official
-Zotero browser connector uses.
+Requires the **Zotero desktop app to be running**. The script posts to
+`/connector/saveItems`, the same endpoint the official Zotero connector uses.
 
-Metadata comes from one of two sources, chosen automatically:
+Metadata comes from CrossRef where possible. CrossRef registers ASAP DOIs with a
+**1–3 day lag**, so for the newest articles the item is built from the listing's
+title / authors / date instead — the button shows `✓ Saved*` and the item is
+tagged **`metadata-unverified`** (author names are split on "last token is the
+family name", which is wrong for compound surnames). CrossRef usually has no
+abstract for ACS articles, so the scraped one is always used as a fallback.
 
-1. **CrossRef** (preferred) — authoritative. CrossRef frequently has no
-   abstract for ACS articles, so the abstract scraped from the page is used
-   as a fallback.
-2. **Page scrape** (fallback) — CrossRef registers ASAP DOIs with a **1–3 day
-   lag**, so the newest articles return 404 there. The item is then built from
-   the listing's title / authors / date plus the scraped abstract, the button
-   shows `✓ Saved*`, and the item is tagged **`metadata-unverified`** as a
-   reminder to check it. (Author names are split on "last token is the family
-   name", which is wrong for compound surnames — hence the tag.)
+Use this button to triage the listing; use the Zotero connector on an individual
+article page when you want the richest metadata plus PDF and snapshot.
 
-### Why not just reuse the connector's route?
+<details>
+<summary><b>Why not just reuse the connector's route?</b></summary>
 
-It already is the same route — the same `/connector/saveItems` endpoint. The
-only difference is where metadata comes from, and on this particular page the
-extension is not better off:
+It already is the same route — the same `/connector/saveItems` endpoint. Only the
+metadata source differs.
 
-- The connector runs site-specific translators in the page. Asking Zotero's
-  `getTranslators`: an **article page** matches `Silverchair` and
-  `Atypon Journals`, so the extension works well there — but the **ASAP listing
-  page matches no site-specific translator at all** (only the generic unAPI /
-  COinS / Embedded Metadata / DOI fallbacks), because the new ACS platform
-  strips every `citation_*` and `dc.*` meta tag and ships no JSON-LD. On the
-  listing the extension degrades to the DOI translator → CrossRef → the same lag.
-- Running those translators needs the extension's `Zotero.Translate` sandbox,
-  which a userscript cannot reproduce.
-- ACS's own RIS export (`/Citation/Download`) is behind Cloudflare and returns 403.
+The connector relies on site-specific translators. Asking Zotero's
+`getTranslators`: an **article page** matches `Silverchair` and `Atypon Journals`,
+so the extension works well there — but the **ASAP listing matches none of them**
+(only the generic unAPI / COinS / Embedded Metadata / DOI fallbacks), because the
+new ACS platform strips every `citation_*` and `dc.*` meta tag and ships no
+JSON-LD. On the listing the extension degrades to the DOI translator → CrossRef →
+the same lag.
 
-So: use this button to triage the listing, and use the Zotero connector on an
-individual article page when you want the richest metadata plus PDF and snapshot.
+Running those translators needs the extension's `Zotero.Translate` sandbox, which
+a userscript cannot reproduce, and ACS's own RIS export
+(`/Citation/Download`) is behind Cloudflare and returns 403.
 
-### Three gotchas found while testing
+</details>
 
-- **A request carrying `Origin` must also send `X-Zotero-Connector-API-Version`.**
-  Zotero silently closes the connection otherwise — that is the gate stopping
-  arbitrary websites from writing to your library. `GM_xmlhttpRequest` always
-  sends `Origin`, so without the header every save fails with a bare `network`
-  error. No other custom header substitutes. Note that testing the endpoint
-  with `curl` is misleading: curl sends no `Origin`, so it always returns 201
-  and hides the failure that a real browser would hit.
+<details>
+<summary><b>Three gotchas when calling the connector from a page</b></summary>
 
-- **`sessionID` must be unique per save.** Zotero treats it as a save-session
-  key; reusing one makes every later save return 409 and be **silently
-  dropped**. The script generates a fresh id each time.
-- **Don't save in the first minute or two after launching Zotero.** The
-  connector answers 201 before its database is ready, and saves in that window
-  vanish without an error.
+- **A request carrying `Origin` must also send `X-Zotero-Connector-API-Version`**,
+  or Zotero silently closes the connection — the gate that stops arbitrary
+  websites from writing to your library. `GM_xmlhttpRequest` always sends
+  `Origin`, so without the header every save fails with a bare `network` error,
+  and no other custom header substitutes. Testing with `curl` is misleading: it
+  sends no `Origin`, always returns 201, and hides the failure a real browser hits.
+- **`sessionID` must be unique per save.** Zotero treats it as a save-session key;
+  reusing one makes later saves return 409 and be **silently dropped**.
+- **Don't save in the first minute or two after launching Zotero.** The connector
+  answers 201 before its database is ready, and saves in that window vanish.
+
+</details>
 
 ## Implementation notes
 
@@ -177,4 +173,4 @@ bulk full-text downloading; fetches are throttled to a concurrency of 3.
 
 ## License
 
-[MIT](LICENSE) © Wei Huang
+[MIT](LICENSE) © Wei952766
