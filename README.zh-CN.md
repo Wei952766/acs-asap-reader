@@ -89,7 +89,13 @@ ACS Catalysis、Nano Letters、ACS Nano 等**所有 ACS 期刊**的 ASAP 页、
 
 所以列表页批量扫读用这个按钮，想要最完整的元数据（含 PDF、快照）就在单篇文章页用 Zotero 插件。
 
-### 两个实测出来的坑
+### 三个实测出来的坑
+
+- **带 `Origin` 的请求必须同时发 `X-Zotero-Connector-API-Version`**。
+  否则 Zotero 直接掐断连接——这是它阻止任意网站写入文献库的安全闸门。
+  `GM_xmlhttpRequest` 总会附带 `Origin`，缺这个头就每次都以 `network` 错误告终，
+  换任何其他自定义头都无效。注意用 `curl` 测这个端点会误导：curl 不带 `Origin`，
+  永远返回 201，从而掩盖真实浏览器必然遇到的失败。
 
 - **`sessionID` 必须每次唯一**。Zotero 把它当保存会话标识，复用同一个 ID 第二次提交直接返回
   409 且**静默丢弃条目**。脚本里每次生成新 ID。

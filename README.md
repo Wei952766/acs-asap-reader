@@ -121,7 +121,15 @@ extension is not better off:
 So: use this button to triage the listing, and use the Zotero connector on an
 individual article page when you want the richest metadata plus PDF and snapshot.
 
-### Two gotchas found while testing
+### Three gotchas found while testing
+
+- **A request carrying `Origin` must also send `X-Zotero-Connector-API-Version`.**
+  Zotero silently closes the connection otherwise — that is the gate stopping
+  arbitrary websites from writing to your library. `GM_xmlhttpRequest` always
+  sends `Origin`, so without the header every save fails with a bare `network`
+  error. No other custom header substitutes. Note that testing the endpoint
+  with `curl` is misleading: curl sends no `Origin`, so it always returns 201
+  and hides the failure that a real browser would hit.
 
 - **`sessionID` must be unique per save.** Zotero treats it as a save-session
   key; reusing one makes every later save return 409 and be **silently
