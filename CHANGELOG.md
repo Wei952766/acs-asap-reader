@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1 — 2026-08-19
+
+- **修复 Zotero 入库在真实 Tampermonkey 下必然失败**。Zotero connector 会掐断
+  任何带 `Origin` 头、但未带 `X-Zotero-Connector-API-Version` 的请求——这是它
+  阻止任意网站写入文献库的安全闸门。`GM_xmlhttpRequest` 总会附带 `Origin`，
+  因此此前每次点 `+ Zotero` 都直接报 `✗ 失败 (network)`。补上该请求头即可。
+  （之前用 curl 测试时未带 `Origin`，所以一直是 201，掩盖了这个问题。）
+
 ## 1.2.0 — 2026-08-19
 
 - 新增**中英双语界面**：首次运行按 `navigator.language` 自动选择，

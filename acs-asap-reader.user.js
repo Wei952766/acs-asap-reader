@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ACS ASAP Reader
 // @namespace    weihuang.acs
-// @version      1.2.0
+// @version      1.2.1
 // @description  Restore graphical abstracts + inline abstracts on ACS (JACS etc.) ASAP / TOC / search list pages, with compact view, keyword filter, highlight, one-click Zotero save and a bilingual (EN/中文) UI.
 // @author       weihuang
 // @match        https://pubs.acs.org/*
@@ -515,7 +515,14 @@
       const r = await gmRequest({
         method: 'POST',
         url: ZOTERO + '/saveItems',
-        headers: { 'Content-Type': 'application/json' },
+        // Zotero drops any request that carries an Origin header unless it also
+        // identifies as a connector -- that is the gate stopping arbitrary sites
+        // from writing to your library. GM_xmlhttpRequest always sends Origin,
+        // so without this header the connection is closed and the save fails.
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Zotero-Connector-API-Version': '3',
+        },
         // Zotero treats sessionID as a save-session key: reusing one returns 409
         // and silently drops the item, so every save needs a fresh id.
         data: JSON.stringify({ items: [item], uri: item.url, sessionID: newSessionID() }),
