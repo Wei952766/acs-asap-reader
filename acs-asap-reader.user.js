@@ -1,9 +1,10 @@
 // ==UserScript==
 // @name         ACS ASAP Reader
 // @namespace    github.com/Wei952766
-// @version      1.2.2
+// @version      1.2.3
 // @description  Restore graphical abstracts + inline abstracts on ACS (JACS etc.) ASAP / TOC / search list pages, with compact view, keyword filter, highlight, one-click Zotero save and a bilingual (EN/中文) UI.
 // @author       Wei952766
+// @license      MIT
 // @match        https://pubs.acs.org/*
 // @run-at       document-idle
 // @grant        GM_xmlhttpRequest
