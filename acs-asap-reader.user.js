@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ACS ASAP Reader
 // @namespace    github.com/Wei952766
-// @version      1.2.3
+// @version      1.3.0
 // @description  Restore graphical abstracts + inline abstracts on ACS (JACS etc.) ASAP / TOC / search list pages, with compact view, keyword filter, highlight, one-click Zotero save and a bilingual (EN/中文) UI.
 // @author       Wei952766
 // @license      MIT
@@ -55,6 +55,8 @@
       kwLabel: '高亮词（逗号分隔）：',
       count: (n, t) => `${n} / ${t} 篇`,
       zotAdd: '+ Zotero', zotOk: '✓ 已入库', zotOkScraped: '✓ 已入库*', zotFail: '✗ 失败',
+      zotBusyPdf: 'PDF…',
+      zotPdfOk: 'PDF 已附加', zotPdfNone: '未附加 PDF（无链接或抓取失败）',
       zotViaCrossref: 'CrossRef 元数据',
       zotViaPage: 'CrossRef 尚未收录此 DOI，元数据取自页面，已打 metadata-unverified 标签待核',
       zotErr: e => `Zotero 没在运行？先打开 Zotero 桌面版再试。(${e})`,
@@ -71,6 +73,8 @@
       kwLabel: 'Highlight terms (comma-separated):',
       count: (n, t) => `${n} / ${t} papers`,
       zotAdd: '+ Zotero', zotOk: '✓ Saved', zotOkScraped: '✓ Saved*', zotFail: '✗ Failed',
+      zotBusyPdf: 'PDF…',
+      zotPdfOk: 'PDF attached', zotPdfNone: 'no PDF attached (missing link or fetch failed)',
       zotViaCrossref: 'Metadata from CrossRef',
       zotViaPage: 'DOI not in CrossRef yet; metadata scraped from the page and tagged metadata-unverified',
       zotErr: e => `Is Zotero running? Open the Zotero desktop app and retry. (${e})`,
@@ -319,6 +323,7 @@
       title: link.textContent.replace(/\s+/g, ' ').trim(),
       authors: [...box.querySelectorAll('.al-authors-list .wi-fullname')].map(s => s.textContent.trim()),
       date: box.querySelector('.al-pub-date')?.textContent.trim() || '',
+      pdfHref: box.querySelector('a.article-pdfLink, a.al-link.pdf')?.getAttribute('href') || '',
     };
   }).filter(Boolean);
 
@@ -480,11 +485,14 @@
   // already show a result, without losing that result.
   function labelZotButton(btn) {
     const st = btn.dataset.state || 'idle';
-    if (st === 'busy') { btn.textContent = '…'; btn.title = ''; return; }
+    if (st === 'busy') { btn.textContent = btn.dataset.busy || '…'; btn.title = ''; return; }
     if (st === 'ok') {
       const scraped = btn.dataset.via === 'page';
-      btn.textContent = scraped ? t('zotOkScraped') : t('zotOk');
-      btn.title = scraped ? t('zotViaPage') : t('zotViaCrossref');
+      const pdf = btn.dataset.pdf === '1';
+      // '*' keeps flagging scraped metadata; ' + PDF' is orthogonal to it.
+      btn.textContent = (scraped ? t('zotOkScraped') : t('zotOk')) + (pdf ? ' + PDF' : '');
+      btn.title = (scraped ? t('zotViaPage') : t('zotViaCrossref'))
+        + ' · ' + (pdf ? t('zotPdfOk') : t('zotPdfNone'));
       return;
     }
     if (st === 'err') {
@@ -494,6 +502,36 @@
     }
     btn.textContent = t('zotAdd');
     btn.title = '';
+  }
+
+  // Zotero attaches the upload to whatever item the same sessionID just saved,
+  // so no parentItemID is needed. The PDF itself is same-origin, which is why a
+  // plain fetch can carry the institutional entitlement that Zotero alone lacks.
+  async function attachPdf(card, sessionID) {
+    if (!card.pdfHref) return false;
+    try {
+      const res = await fetch(card.pdfHref, { credentials: 'include' });
+      if (!res.ok) return false;
+      const buf = await res.arrayBuffer();
+      // A paywall or Cloudflare interstitial comes back as HTML with a 200.
+      const magic = new TextDecoder().decode(new Uint8Array(buf.slice(0, 5)));
+      if (!magic.startsWith('%PDF')) return false;
+      const meta = {
+        sessionID,
+        url: new URL(card.pdfHref, location.origin).href,
+        title: 'Full Text PDF',
+      };
+      const r = await gmRequest({
+        method: 'POST',
+        url: ZOTERO + '/saveAttachment',
+        headers: { 'Content-Type': 'application/pdf', 'X-Metadata': JSON.stringify(meta) },
+        data: new Blob([buf], { type: 'application/pdf' }),
+        timeout: 180000,          // these run 4-6 MB
+      });
+      return r.status === 201;
+    } catch (e) {
+      return false;
+    }
   }
 
   async function saveToZotero(card, btn) {
@@ -512,6 +550,7 @@
     } catch (e) { /* fall through to page scrape */ }
     if (!item) item = itemFromPage(card);
 
+    const sessionID = newSessionID();
     try {
       const r = await gmRequest({
         method: 'POST',
@@ -526,12 +565,19 @@
         },
         // Zotero treats sessionID as a save-session key: reusing one returns 409
         // and silently drops the item, so every save needs a fresh id.
-        data: JSON.stringify({ items: [item], uri: item.url, sessionID: newSessionID() }),
+        data: JSON.stringify({ items: [item], uri: item.url, sessionID }),
       });
       if (r.status !== 201) throw new Error('HTTP ' + r.status);
-      btn.dataset.state = 'ok';
       btn.dataset.via = viaCrossref ? 'crossref' : 'page';
       btn.className = 'asap-zot ok';
+
+      // The item is already saved; a failed PDF only downgrades the label.
+      btn.dataset.busy = t('zotBusyPdf');
+      labelZotButton(btn);
+      const pdfOk = await attachPdf(card, sessionID);
+
+      btn.dataset.state = 'ok';
+      btn.dataset.pdf = pdfOk ? '1' : '0';
       labelZotButton(btn);
     } catch (e) {
       btn.disabled = false;
