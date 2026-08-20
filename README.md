@@ -95,8 +95,14 @@ tagged **`metadata-unverified`** (author names are split on "last token is the
 family name", which is wrong for compound surnames). CrossRef usually has no
 abstract for ACS articles, so the scraped one is always used as a fallback.
 
+The **full-text PDF is attached** as well. The script fetches it same-origin from
+the page, so it carries your institutional entitlement — which is why this works
+for subscribed articles that Zotero could not download on its own. A failed PDF
+never blocks the item: the button just reads `✓ Saved` instead of `✓ Saved + PDF`
+and the tooltip says why.
+
 Use this button to triage the listing; use the Zotero connector on an individual
-article page when you want the richest metadata plus PDF and snapshot.
+article page when you also want a page snapshot.
 
 <details>
 <summary><b>Why not just reuse the connector's route?</b></summary>
