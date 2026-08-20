@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ACS ASAP Reader
 // @namespace    github.com/Wei952766
-// @version      1.3.2
+// @version      1.3.3
 // @description  Restore graphical abstracts + inline abstracts on ACS (JACS etc.) ASAP / TOC / search list pages, with compact view, keyword filter, highlight, one-click Zotero save and a bilingual (EN/中文) UI.
 // @author       Wei952766
 // @license      MIT
@@ -198,6 +198,7 @@
 
   const bar = document.createElement('div');
   bar.className = 'asap-bar';
+  bar.dataset.asapVersion = '1.3.3';   // lets a page-side check confirm what is running
   listGroup.insertBefore(bar, listGroup.firstChild);
 
   let countEl, filterInput, colsSelect;
@@ -548,11 +549,28 @@
 
     // Binary bodies through GM_xmlhttpRequest are version-dependent: newer
     // Tampermonkey takes a Blob, older builds need a binary string.
+    const errs = [];
+
+    // Probe /ping (which writes nothing) to separate "Tampermonkey cannot carry
+    // this many bytes" from "Zotero refused this particular request".
+    const probe = async (name, data, binary) => {
+      try {
+        const r = await gmRequest({
+          method: 'POST', url: ZOTERO + '/ping',
+          headers: ZOTERO_HEADERS, data, binary, timeout: 120000,
+        });
+        errs.push(name + ':HTTP' + r.status);
+      } catch (e) {
+        errs.push(name + ':' + (e.message || e.name));
+      }
+    };
+    await probe('pingSmall', 'x');
+    await probe('pingBig', new Blob([buf], { type: 'application/pdf' }));
+
     const attempts = [
       { name: 'blob', data: new Blob([buf], { type: 'application/pdf' }) },
       { name: 'binstr', data: bufToBinaryString(buf), binary: true },
     ];
-    const errs = [];
     for (const a of attempts) {
       try {
         const r = await gmRequest({
