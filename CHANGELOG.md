@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0 — 2026-08-20
+
+- **入库时一并附上全文 PDF**。脚本在页内用同源 `fetch` 取 PDF（因此带着你的机构
+  订阅授权，这是 Zotero 单独做不到的），再经 `/connector/saveAttachment` 上传，
+  与元数据用同一个 `sessionID` 关联，无需 `parentItemID`。开放获取与订阅文章均已实测。
+  按钮相应显示 `✓ 已入库 + PDF`；PDF 失败不影响条目本身，只降级标签并在 tooltip
+  里给出原因。
+- `X-Zotero-Connector-API-Version` 提取为常量 `ZOTERO_HEADERS`，供所有 connector
+  调用共用。**此前 `saveAttachment` 漏发该头，被 Zotero 的安全闸门静默掐断连接**
+  （表现为 `network` 错误），是 PDF 一直附加失败的根因。
+- 工具栏根节点新增 `data-asap-version`，便于确认页面上实际运行的版本。
+
 ## 1.2.3 — 2026-08-19
 
 - 脚本头补 `@license MIT`（Greasy Fork 等分发平台会读取该字段）。

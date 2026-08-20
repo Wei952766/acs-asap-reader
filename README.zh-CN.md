@@ -73,7 +73,11 @@ ACS Catalysis、Nano Letters、ACS Nano 等**所有 ACS 期刊**的 ASAP 页、
 标签待核（作者按"最后一个词是姓"切分，复姓会错）。CrossRef 的 ACS 摘要常缺失，
 一律用页面抓到的摘要补上。
 
-列表页批量扫读用这个按钮；想要含 PDF 和快照的完整元数据，在单篇文章页用 Zotero 插件。
+**全文 PDF 也会一并附上**。脚本在页内同源取 PDF，因此带着你的机构订阅授权——
+这正是订阅文章能成功、而 Zotero 自己下不到的原因。PDF 失败不影响条目本身：
+按钮只是显示 `✓ 已入库` 而非 `✓ 已入库 + PDF`，tooltip 里给出原因。
+
+列表页批量扫读用这个按钮；还想要网页快照的话，在单篇文章页用 Zotero 插件。
 
 <details>
 <summary><b>为什么不复用 Zotero 插件的路径</b></summary>
