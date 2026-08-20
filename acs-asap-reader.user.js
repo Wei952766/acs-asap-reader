@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ACS ASAP Reader
 // @namespace    github.com/Wei952766
-// @version      1.3.1
+// @version      1.3.2
 // @description  Restore graphical abstracts + inline abstracts on ACS (JACS etc.) ASAP / TOC / search list pages, with compact view, keyword filter, highlight, one-click Zotero save and a bilingual (EN/中文) UI.
 // @author       Wei952766
 // @license      MIT
@@ -413,6 +413,9 @@
   // blocked; GM_xmlhttpRequest is the only way to reach 127.0.0.1:23119.
   const GM_HTTP = typeof GM_xmlhttpRequest === 'function' ? GM_xmlhttpRequest : null;
   const ZOTERO = 'http://127.0.0.1:23119/connector';
+  // Zotero closes any request that carries an Origin header unless it also
+  // identifies as a connector. EVERY connector call needs this, not just saves.
+  const ZOTERO_HEADERS = { 'X-Zotero-Connector-API-Version': '3' };
   let sessionSeq = 0;
   const newSessionID = () => `acs-asap-${Date.now().toString(36)}-${sessionSeq++}`;
 
@@ -534,6 +537,7 @@
     if (!magic.startsWith('%PDF')) return 'not a PDF';
 
     const headers = {
+      ...ZOTERO_HEADERS,
       'Content-Type': 'application/pdf',
       'X-Metadata': JSON.stringify({
         sessionID,
@@ -589,10 +593,7 @@
         // identifies as a connector -- that is the gate stopping arbitrary sites
         // from writing to your library. GM_xmlhttpRequest always sends Origin,
         // so without this header the connection is closed and the save fails.
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Zotero-Connector-API-Version': '3',
-        },
+        headers: { ...ZOTERO_HEADERS, 'Content-Type': 'application/json' },
         // Zotero treats sessionID as a save-session key: reusing one returns 409
         // and silently drops the item, so every save needs a fresh id.
         data: JSON.stringify({ items: [item], uri: item.url, sessionID }),
