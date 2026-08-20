@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ACS ASAP Reader
 // @namespace    github.com/Wei952766
-// @version      1.3.0
+// @version      1.3.1
 // @description  Restore graphical abstracts + inline abstracts on ACS (JACS etc.) ASAP / TOC / search list pages, with compact view, keyword filter, highlight, one-click Zotero save and a bilingual (EN/中文) UI.
 // @author       Wei952766
 // @license      MIT
@@ -491,8 +491,9 @@
       const pdf = btn.dataset.pdf === '1';
       // '*' keeps flagging scraped metadata; ' + PDF' is orthogonal to it.
       btn.textContent = (scraped ? t('zotOkScraped') : t('zotOk')) + (pdf ? ' + PDF' : '');
+      const why = btn.dataset.pdfErr ? ` (${btn.dataset.pdfErr})` : '';
       btn.title = (scraped ? t('zotViaPage') : t('zotViaCrossref'))
-        + ' · ' + (pdf ? t('zotPdfOk') : t('zotPdfNone'));
+        + ' · ' + (pdf ? t('zotPdfOk') : t('zotPdfNone') + why);
       return;
     }
     if (st === 'err') {
@@ -507,31 +508,60 @@
   // Zotero attaches the upload to whatever item the same sessionID just saved,
   // so no parentItemID is needed. The PDF itself is same-origin, which is why a
   // plain fetch can carry the institutional entitlement that Zotero alone lacks.
+  // Returns null on success, or a short reason string that ends up in the tooltip.
+  function bufToBinaryString(buf) {
+    const bytes = new Uint8Array(buf);
+    let out = '';
+    const CHUNK = 0x8000;                       // fromCharCode.apply blows the stack on MBs
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      out += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return out;
+  }
+
   async function attachPdf(card, sessionID) {
-    if (!card.pdfHref) return false;
+    if (!card.pdfHref) return 'no pdf link';
+    let buf;
     try {
       const res = await fetch(card.pdfHref, { credentials: 'include' });
-      if (!res.ok) return false;
-      const buf = await res.arrayBuffer();
-      // A paywall or Cloudflare interstitial comes back as HTML with a 200.
-      const magic = new TextDecoder().decode(new Uint8Array(buf.slice(0, 5)));
-      if (!magic.startsWith('%PDF')) return false;
-      const meta = {
+      if (!res.ok) return 'fetch HTTP ' + res.status;
+      buf = await res.arrayBuffer();
+    } catch (e) {
+      return 'fetch ' + (e.message || e.name);
+    }
+    // A paywall or Cloudflare interstitial comes back as HTML with a 200.
+    const magic = new TextDecoder().decode(new Uint8Array(buf.slice(0, 5)));
+    if (!magic.startsWith('%PDF')) return 'not a PDF';
+
+    const headers = {
+      'Content-Type': 'application/pdf',
+      'X-Metadata': JSON.stringify({
         sessionID,
         url: new URL(card.pdfHref, location.origin).href,
         title: 'Full Text PDF',
-      };
-      const r = await gmRequest({
-        method: 'POST',
-        url: ZOTERO + '/saveAttachment',
-        headers: { 'Content-Type': 'application/pdf', 'X-Metadata': JSON.stringify(meta) },
-        data: new Blob([buf], { type: 'application/pdf' }),
-        timeout: 180000,          // these run 4-6 MB
-      });
-      return r.status === 201;
-    } catch (e) {
-      return false;
+      }),
+    };
+
+    // Binary bodies through GM_xmlhttpRequest are version-dependent: newer
+    // Tampermonkey takes a Blob, older builds need a binary string.
+    const attempts = [
+      { name: 'blob', data: new Blob([buf], { type: 'application/pdf' }) },
+      { name: 'binstr', data: bufToBinaryString(buf), binary: true },
+    ];
+    const errs = [];
+    for (const a of attempts) {
+      try {
+        const r = await gmRequest({
+          method: 'POST', url: ZOTERO + '/saveAttachment',
+          headers, data: a.data, binary: a.binary, timeout: 180000,
+        });
+        if (r.status === 201) return null;
+        errs.push(a.name + ':HTTP' + r.status);
+      } catch (e) {
+        errs.push(a.name + ':' + (e.message || e.name));
+      }
     }
+    return errs.join(' | ');
   }
 
   async function saveToZotero(card, btn) {
@@ -574,10 +604,11 @@
       // The item is already saved; a failed PDF only downgrades the label.
       btn.dataset.busy = t('zotBusyPdf');
       labelZotButton(btn);
-      const pdfOk = await attachPdf(card, sessionID);
+      const pdfErr = await attachPdf(card, sessionID);
 
       btn.dataset.state = 'ok';
-      btn.dataset.pdf = pdfOk ? '1' : '0';
+      btn.dataset.pdf = pdfErr ? '0' : '1';
+      btn.dataset.pdfErr = pdfErr || '';
       labelZotButton(btn);
     } catch (e) {
       btn.disabled = false;
