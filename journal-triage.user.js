@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Journal Triage
 // @namespace    github.com/Wei952766
-// @version      2.1.2
+// @version      2.2.0
 // @description  Make journal listings scannable: multi-column grid, live filtering, keyword highlighting and one-click Zotero saving with the full-text PDF. Restores graphical abstracts and abstracts on ACS, which strips them. Works on ACS, Wiley and Nature. Bilingual EN/中文.
 // @author       Wei952766
 // @license      MIT
@@ -22,7 +22,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.1.2';
+  const VERSION = '2.2.0';
 
   // ------------------------------------------------------------------ sites
   // Each adapter describes where the parts of a listing live, and declares
@@ -101,8 +101,10 @@
       date: 'time',
       actionBar: null,
       abstract: { mode: 'native', sel: '.c-card__summary, [data-test="article-description"]' },
-      // The listing thumbnail is a cropped teaser, not a graphical abstract.
-      graphic: { mode: 'none' },
+      // Nature publishes no graphical abstract; this is the listing teaser crop.
+      // Springer serves the same crop at larger sizes, so ask for a sharp one.
+      graphic: { mode: 'native', sel: 'img',
+        upgrade: src => src.replace(/\/w\d+h\d+\//, '/w690/') },
       doi: ({ href }) => {
         const id = (href.match(/\/articles\/([^/?#]+)/) || [])[1];
         return id ? '10.1038/' + id : undefined;
@@ -128,7 +130,7 @@
         body.jt-grid .jt-item .c-meta { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline }
         body.jt-grid .jt-item .c-meta__item { margin: 0 }
         body.jt-grid .jt-item > button.jt-zot { align-self: flex-start }
-        .jt-item .c-card__image, .jt-item .c-meta__item--pipe { display: none }`,
+        .jt-item .c-meta__item--pipe { display: none }`,
     },
   ];
 
@@ -337,8 +339,9 @@
     const absNode = SITE.abstract.mode === 'native' ? el.querySelector(SITE.abstract.sel) : null;
     const imgNode = SITE.graphic.mode === 'native' ? el.querySelector(SITE.graphic.sel) : null;
     const nativeAbs = absNode ? absNode.textContent.replace(/\s+/g, ' ').trim() : '';
-    const nativeGa = imgNode
+    let nativeGa = imgNode
       ? (imgNode.getAttribute('src') || imgNode.getAttribute('data-src') || '') : '';
+    if (nativeGa && SITE.graphic.upgrade) nativeGa = SITE.graphic.upgrade(nativeGa);
 
     if (nativeGa) {
       ga.classList.remove('jt-empty');
@@ -346,7 +349,7 @@
     }
     if (absNode) absNode.remove();
     if (imgNode && imgNode.isConnected) {
-      (imgNode.closest('figure, picture, .issue-item__image') || imgNode).remove();
+      (imgNode.closest('figure, picture, .issue-item__image, .c-card__image') || imgNode).remove();
     }
 
     const labels = sectionOf.get(el) || [];
