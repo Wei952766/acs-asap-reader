@@ -67,10 +67,10 @@
       list: '.issue-items-container',
       title: '.issue-item__title',
       link: 'a.issue-item__title',
-      authors: '.loa__item .author-style, .issue-item__authors span',
-      date: '.issue-item__date, .ePubDate',
+      authors: '.loa .comma__item',
+      date: '.ePubDate',
       actionBar: null,                       // no natural row; the button is appended
-      abstract: { mode: 'native', sel: '.issue-item__abstract' },
+      abstract: { mode: 'native', sel: '.toc-item__abstract' },
       graphic: { mode: 'native', sel: 'img' },
       doi: ({ href }) => (href.match(/\/doi\/(?:abs\/|full\/|epdf\/)?(10\.\d{4,9}\/[^/?#]+)/) || [])[1],
       // /doi/pdf/ serves the reader shell, not a PDF; pdfdirect serves the file.
@@ -280,19 +280,21 @@
     abs.addEventListener('click', () => abs.classList.toggle('open'));
 
     // Native pieces are adopted in place; fetched ones get empty slots to fill.
-    let nativeAbs = '';
-    if (SITE.abstract.mode === 'native') {
-      const n = el.querySelector(SITE.abstract.sel);
-      if (n) { nativeAbs = n.textContent.replace(/\s+/g, ' ').trim(); n.remove(); }
+    // Read everything before removing anything -- on Wiley the graphic sits
+    // inside the abstract container, so removing that first would take it too.
+    const absNode = SITE.abstract.mode === 'native' ? el.querySelector(SITE.abstract.sel) : null;
+    const imgNode = SITE.graphic.mode === 'native' ? el.querySelector(SITE.graphic.sel) : null;
+    const nativeAbs = absNode ? absNode.textContent.replace(/\s+/g, ' ').trim() : '';
+    const nativeGa = imgNode
+      ? (imgNode.getAttribute('src') || imgNode.getAttribute('data-src') || '') : '';
+
+    if (nativeGa) {
+      ga.classList.remove('jt-empty');
+      ga.appendChild(mkImage(new URL(nativeGa, location.origin).href));
     }
-    if (SITE.graphic.mode === 'native') {
-      const img = el.querySelector(SITE.graphic.sel);
-      if (img) {
-        const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-        if (src) { ga.classList.remove('jt-empty'); ga.appendChild(mkImage(new URL(src, location.origin).href)); }
-        const holder = img.closest('figure, .issue-item__image, picture');
-        (holder || img).remove();
-      }
+    if (absNode) absNode.remove();
+    if (imgNode && imgNode.isConnected) {
+      (imgNode.closest('figure, picture, .issue-item__image') || imgNode).remove();
     }
 
     titleEl.parentElement.insertBefore(ga, titleEl);
