@@ -76,6 +76,15 @@
       // /doi/pdf/ serves the reader shell, not a PDF; pdfdirect serves the file.
       pdf: ({ doi }) => (doi ? `/doi/pdfdirect/${doi}` : ''),
       css: `
+        /* Wiley pins the list into a 720px Bootstrap column beside a promo rail */
+        body.jt-grid .container:has(.main-content) { max-width: none; width: auto }
+        body.jt-grid .main-content.col-md-8 { width: 100%; float: none }
+        body.jt-grid .main-content.col-md-8 ~ .col-md-4 { display: none }
+        body.jt-grid.jt-narrow .container:has(.main-content) { max-width: 1080px }
+        body.jt-grid.jt-narrow .main-content.col-md-8 { width: 66.66% }
+        body.jt-grid.jt-narrow .main-content.col-md-8 ~ .col-md-4 { display: block }
+        /* section labels are siblings of the cards inside the grid */
+        body.jt-grid .jt-list > .toc__heading { grid-column: 1 / -1; margin: 10px 0 0 }
         body.jt-grid .issue-items-container { padding: 0 }
         .jt-item .issue-item__footer, .jt-item .issue-item__links { display: none }`,
     },
