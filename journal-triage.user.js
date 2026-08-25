@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Journal Triage
 // @namespace    github.com/Wei952766
-// @version      2.5.0
+// @version      2.5.1
 // @description  Make journal listings scannable: multi-column grid, live filtering, keyword highlighting and one-click Zotero saving with the full-text PDF. Restores graphical abstracts and abstracts on ACS, which strips them. Works on ACS, Wiley and Nature. Bilingual EN/中文.
 // @author       Wei952766
 // @license      MIT
@@ -22,7 +22,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.5.0';
+  const VERSION = '2.5.1';
 
   // ------------------------------------------------------------------ sites
   // Each adapter describes where the parts of a listing live, and declares
@@ -61,7 +61,11 @@
         .jt-item .badge-bar a { font-size: 11px !important; padding: 0 !important; border: 0 !important;
           background: none !important; text-decoration: underline }
         .jt-item .badge-bar .item:has(a.SupplementaryDataLink) { display: none }
-        .jt-item .al-expanded-section { display: none }`,
+        .jt-item .al-expanded-section { display: none }
+        /* issue TOCs float the item body with no width, so it collapses to one
+           word per line once the card is a grid cell */
+        body.jt-grid .jt-item .al-article-items { float: none; width: auto }
+        body.jt-grid .jt-item .issue-graphical-abstract { display: none }`,
     },
     {
       id: 'wiley',
@@ -370,7 +374,7 @@
     }
     if (absNode) absNode.remove();
     if (imgNode && imgNode.isConnected) {
-      (imgNode.closest('figure, picture, .issue-item__image, .c-card__image') || imgNode).remove();
+      (imgNode.closest('figure, picture, .issue-item__image, .c-card__image, .issue-graphical-abstract') || imgNode).remove();
     }
 
     const labels = sectionOf.get(el) || [];
