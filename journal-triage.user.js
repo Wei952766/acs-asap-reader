@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Journal Triage
 // @namespace    github.com/Wei952766
-// @version      2.2.0
+// @version      2.3.0
 // @description  Make journal listings scannable: multi-column grid, live filtering, keyword highlighting and one-click Zotero saving with the full-text PDF. Restores graphical abstracts and abstracts on ACS, which strips them. Works on ACS, Wiley and Nature. Bilingual EN/中文.
 // @author       Wei952766
 // @license      MIT
@@ -22,7 +22,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.2.0';
+  const VERSION = '2.3.0';
 
   // ------------------------------------------------------------------ sites
   // Each adapter describes where the parts of a listing live, and declares
@@ -274,6 +274,7 @@
     background:linear-gradient(rgba(255,255,255,0),#fff)}
   .jt-abs:empty{display:none}
   .jt-hidden{display:none !important}
+  .jt-emptied{display:none}
   .jt-hit{box-shadow:inset 3px 0 0 #e8a33d}
   body.jt-grid .jt-item.jt-hit{border-color:#e8a33d}
   .jt-abs mark, .jt-title mark{background:#ffe9a8;color:inherit;padding:0 1px;border-radius:2px}
@@ -297,7 +298,14 @@
   // ------------------------------------------------------------------ cards
   // Own classes go on the publisher's elements so every rule above is
   // site-agnostic; anything publisher-specific lives in SITE.css.
-  const listEl = (SITE.list && items[0].closest(SITE.list)) || items[0].parentElement;
+  // A listing can be split across several containers -- Wiley's issue TOC has
+  // one per section -- so collect them all and fold everything into one grid.
+  const containers = [];
+  for (const el of items) {
+    const c = (SITE.list && el.closest(SITE.list)) || el.parentElement;
+    if (c && !containers.includes(c)) containers.push(c);
+  }
+  const listEl = containers[0];
   listEl.classList.add('jt-list');
 
   // Publishers interleave section headings between cards, which chops the grid
@@ -305,15 +313,23 @@
   const sectionOf = new Map();
   if (SITE.sectionHeading) {
     let kind = '', flag = '';
-    for (const child of [...listEl.children]) {
-      if (child.matches(SITE.sectionHeading)) {
-        const txt = child.textContent.replace(/\s+/g, ' ').trim();
-        if (child.tagName === 'H3') { kind = txt; flag = ''; } else { flag = txt; }
-        continue;
+    for (const c of containers) {
+      for (const child of [...c.children]) {
+        if (child.matches(SITE.sectionHeading)) {
+          const txt = child.textContent.replace(/\s+/g, ' ').trim();
+          if (child.tagName === 'H3') { kind = txt; flag = ''; } else { flag = txt; }
+          continue;
+        }
+        const it = child.matches(SITE.item) ? child : child.querySelector(SITE.item);
+        if (it) sectionOf.set(it, [kind, flag].filter(Boolean));
       }
-      const it = child.matches(SITE.item) ? child : child.querySelector(SITE.item);
-      if (it) sectionOf.set(it, [kind, flag].filter(Boolean));
     }
+  }
+
+  // Labels are read; now everything can share one grid container.
+  if (containers.length > 1) {
+    for (const el of items) if (el.parentElement !== listEl) listEl.appendChild(el);
+    for (const c of containers.slice(1)) c.classList.add('jt-emptied');
   }
 
   const cards = items.map((el) => {
