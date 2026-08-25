@@ -110,16 +110,22 @@
         return id ? `/articles/${id}.pdf` : '';
       },
       css: `
-        body.jt-grid .c-article-list, body.jt-grid .app-article-list-row { display: contents }
-        .jt-item .c-card__image { display: none }`,
+        body.jt-grid .jt-list { list-style: none; padding-left: 0; margin-left: 0 }
+        body.jt-grid .jt-item { list-style: none }
+        /* Nature's own row rules fight the grid */
+        body.jt-grid .app-article-list-row__item { border: 0; padding: 0 }
+        .jt-item .c-card__image, .jt-item .c-meta__item--pipe { display: none }`,
     },
   ];
 
   const SITE = SITES.find(s => s.host.test(location.hostname) && document.querySelector(s.item));
   if (!SITE) return;
 
-  const items = [...document.querySelectorAll(SITE.item)]
-    .filter(el => el.querySelector(SITE.link));
+  // A comma selector can match both a wrapper and the node inside it
+  // (Nature nests <article> in <li>), so keep only the outermost matches.
+  const matched = [...document.querySelectorAll(SITE.item)];
+  const items = matched.filter(el =>
+    el.querySelector(SITE.link) && !matched.some(o => o !== el && el.contains(o)));
   if (!items.length) return;
 
   // --------------------------------------------------------------- settings
