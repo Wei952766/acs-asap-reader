@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Journal Triage
 // @namespace    github.com/Wei952766
-// @version      2.3.0
+// @version      2.4.0
 // @description  Make journal listings scannable: multi-column grid, live filtering, keyword highlighting and one-click Zotero saving with the full-text PDF. Restores graphical abstracts and abstracts on ACS, which strips them. Works on ACS, Wiley and Nature. Bilingual EN/中文.
 // @author       Wei952766
 // @license      MIT
@@ -22,7 +22,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.3.0';
+  const VERSION = '2.4.0';
 
   // ------------------------------------------------------------------ sites
   // Each adapter describes where the parts of a listing live, and declares
@@ -73,7 +73,9 @@
       // Wiley interleaves type headings between cards; we fold them into badges
       sectionHeading: '.toc__heading',
       abstract: { mode: 'native', sel: '.toc-item__abstract' },
-      graphic: { mode: 'native', sel: 'img' },
+      // Early View carries graphics inline; the issue TOC does not, so fall
+      // back to the article page, which uses the same selector ACS does.
+      graphic: { mode: 'native', sel: 'img', fetchSel: '.graphical-abstract img' },
       doi: ({ href }) => (href.match(/\/doi\/(?:abs\/|full\/|epdf\/)?(10\.\d{4,9}\/[^/?#]+)/) || [])[1],
       // /doi/pdf/ serves the reader shell, not a PDF; pdfdirect serves the file.
       pdf: ({ doi }) => (doi ? `/doi/pdfdirect/${doi}` : ''),
@@ -386,9 +388,14 @@
     titleEl.after(abs);
     if (nativeAbs) abs.textContent = nativeAbs;
 
+    const wantsFetch =
+      (SITE.abstract.mode === 'fetch' && !nativeAbs) ||
+      SITE.graphic.mode === 'fetch' ||
+      (!!SITE.graphic.fetchSel && !nativeGa);
+
     const card = {
       el, href, doi, ga, abs, link,
-      loaded: SITE.abstract.mode === 'native' && SITE.graphic.mode !== 'fetch',
+      loaded: !wantsFetch,
       title: (titleEl.textContent || '').replace(/\s+/g, ' ').trim(),
       authors: [...el.querySelectorAll(SITE.authors)].map(a => a.textContent.trim()).filter(Boolean),
       date: el.querySelector(SITE.date)?.getAttribute?.('datetime')
@@ -475,7 +482,7 @@
     });
   }
 
-  const needsFetch = SITE.abstract.mode === 'fetch' || SITE.graphic.mode === 'fetch';
+  const needsFetch = cards.some(c => !c.loaded);
 
   bar.addEventListener('click', (e) => {
     const b = e.target.closest('button');
@@ -535,8 +542,10 @@
       const res = await fetch(card.href, { credentials: 'include' });
       if (!res.ok) throw new Error(res.status);
       const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-      const img = SITE.graphic.mode === 'fetch' ? doc.querySelector(SITE.graphic.sel) : null;
-      const absNode = SITE.abstract.mode === 'fetch' ? doc.querySelector(SITE.abstract.sel) : null;
+      const gaSel = SITE.graphic.mode === 'fetch' ? SITE.graphic.sel : SITE.graphic.fetchSel;
+      const img = gaSel && !card.ga.querySelector('img') ? doc.querySelector(gaSel) : null;
+      const absNode = SITE.abstract.mode === 'fetch' && !card.abs.textContent
+        ? doc.querySelector(SITE.abstract.sel) : null;
       const entry = {
         ga: img ? new URL(img.getAttribute('src'), location.origin).href : '',
         abs: absNode ? absNode.textContent.replace(/\s+/g, ' ').replace(/^Abstract\s*/i, '').trim() : '',
@@ -551,10 +560,15 @@
   }
 
   function render(card, entry) {
-    card.ga.innerHTML = '';
-    if (entry.ga) { card.ga.classList.remove('jt-empty'); card.ga.appendChild(mkImage(entry.ga)); }
-    else card.ga.classList.add('jt-empty');
-    if (entry.abs) card.abs.textContent = entry.abs;
+    if (entry.ga && !card.ga.querySelector('img')) {
+      card.ga.innerHTML = '';
+      card.ga.classList.remove('jt-empty');
+      card.ga.appendChild(mkImage(entry.ga));
+    } else if (!entry.ga && !card.ga.querySelector('img')) {
+      card.ga.innerHTML = '';
+      card.ga.classList.add('jt-empty');
+    }
+    if (entry.abs && !card.abs.textContent) card.abs.textContent = entry.abs;
     if (!state.showAbs) card.abs.style.display = 'none';
     card.text = buildText(card);
     markKeywords(card);
@@ -583,7 +597,7 @@
       if (card) { queue.push(() => load(card)); pump(); }
     }
   }, { rootMargin: '600px 0px' });
-  if (needsFetch) cards.forEach(c => io.observe(c.el));
+  cards.filter(c => !c.loaded).forEach(c => io.observe(c.el));
 
   // ----------------------------------------------------------------- zotero
   // Zotero closes any request carrying an Origin header unless it also
