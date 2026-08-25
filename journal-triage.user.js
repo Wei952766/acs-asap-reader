@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Journal Triage
 // @namespace    github.com/Wei952766
-// @version      2.1.0
+// @version      2.1.1
 // @description  Make journal listings scannable: multi-column grid, live filtering, keyword highlighting and one-click Zotero saving with the full-text PDF. Restores graphical abstracts and abstracts on ACS, which strips them. Works on ACS, Wiley and Nature. Bilingual EN/中文.
 // @author       Wei952766
 // @license      MIT
@@ -22,7 +22,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.1.0';
+  const VERSION = '2.1.1';
 
   // ------------------------------------------------------------------ sites
   // Each adapter describes where the parts of a listing live, and declares
@@ -114,8 +114,17 @@
       css: `
         body.jt-grid .jt-list { list-style: none; padding-left: 0; margin-left: 0 }
         body.jt-grid .jt-item { list-style: none }
-        /* Nature's own row rules fight the grid */
         body.jt-grid .app-article-list-row__item { border: 0; padding: 0 }
+        /* Nature lays a card out as a reversed flex ROW, which collapses into
+           slivers once the card is one grid cell wide. Stack it instead, and
+           float the meta line to the top so it reads like a badge row. */
+        body.jt-grid .jt-item.c-card { display: flex; flex-direction: column; height: auto }
+        body.jt-grid .jt-item .c-card__section.c-meta { order: -1; margin: 0 0 6px; padding: 0 }
+        body.jt-grid .jt-item .c-card__layout { display: block; width: auto; height: auto }
+        body.jt-grid .jt-item .c-card__body { display: block; width: auto }
+        body.jt-grid .jt-item .c-meta { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline }
+        body.jt-grid .jt-item .c-meta__item { margin: 0 }
+        body.jt-grid .jt-item > button.jt-zot { align-self: flex-start }
         .jt-item .c-card__image, .jt-item .c-meta__item--pipe { display: none }`,
     },
   ];
