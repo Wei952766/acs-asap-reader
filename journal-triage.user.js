@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Journal Triage
 // @namespace    github.com/Wei952766
-// @version      2.0.0
+// @version      2.1.0
 // @description  Make journal listings scannable: multi-column grid, live filtering, keyword highlighting and one-click Zotero saving with the full-text PDF. Restores graphical abstracts and abstracts on ACS, which strips them. Works on ACS, Wiley and Nature. Bilingual EN/中文.
 // @author       Wei952766
 // @license      MIT
@@ -22,7 +22,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.0.0';
+  const VERSION = '2.1.0';
 
   // ------------------------------------------------------------------ sites
   // Each adapter describes where the parts of a listing live, and declares
@@ -70,6 +70,8 @@
       authors: '.loa .comma__item',
       date: '.ePubDate',
       actionBar: null,                       // no natural row; the button is appended
+      // Wiley interleaves type headings between cards; we fold them into badges
+      sectionHeading: '.toc__heading',
       abstract: { mode: 'native', sel: '.toc-item__abstract' },
       graphic: { mode: 'native', sel: 'img' },
       doi: ({ href }) => (href.match(/\/doi\/(?:abs\/|full\/|epdf\/)?(10\.\d{4,9}\/[^/?#]+)/) || [])[1],
@@ -83,8 +85,8 @@
         body.jt-grid.jt-narrow .container:has(.main-content) { max-width: 1080px }
         body.jt-grid.jt-narrow .main-content.col-md-8 { width: 66.66% }
         body.jt-grid.jt-narrow .main-content.col-md-8 ~ .col-md-4 { display: block }
-        /* section labels are siblings of the cards inside the grid */
-        body.jt-grid .jt-list > .toc__heading { grid-column: 1 / -1; margin: 10px 0 0 }
+        /* headings are folded into per-card badges, so drop them from the flow */
+        .jt-list > .toc__heading { display: none }
         body.jt-grid .issue-items-container { padding: 0 }
         .jt-item .issue-item__footer, .jt-item .issue-item__links { display: none }`,
     },
@@ -243,6 +245,11 @@
   body.jt-compact .jt-item .jt-title{font-size:14px;line-height:1.3;margin:2px 0}
   body.jt-compact .jt-ga{display:none}
 
+  .jt-badges{display:flex;flex-wrap:wrap;gap:5px;margin:0 0 6px}
+  .jt-badge{font:600 9.5px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.04em;
+    text-transform:uppercase;color:#5a6472;background:#eef1f4;border-radius:3px;padding:1px 6px;white-space:nowrap}
+  .jt-badge--flag{color:#8a4b12;background:#fdf0dc}
+
   .jt-ga{margin:2px 0 6px;min-height:4px}
   .jt-ga img{width:100%;max-height:220px;object-fit:contain;background:#fafbfc;border:1px solid #eceff2;border-radius:6px;cursor:zoom-in}
   .jt-ga.jt-empty{display:none}
@@ -279,6 +286,22 @@
   const listEl = (SITE.list && items[0].closest(SITE.list)) || items[0].parentElement;
   listEl.classList.add('jt-list');
 
+  // Publishers interleave section headings between cards, which chops the grid
+  // into bands. Fold each heading into a per-card badge instead.
+  const sectionOf = new Map();
+  if (SITE.sectionHeading) {
+    let kind = '', flag = '';
+    for (const child of [...listEl.children]) {
+      if (child.matches(SITE.sectionHeading)) {
+        const txt = child.textContent.replace(/\s+/g, ' ').trim();
+        if (child.tagName === 'H3') { kind = txt; flag = ''; } else { flag = txt; }
+        continue;
+      }
+      const it = child.matches(SITE.item) ? child : child.querySelector(SITE.item);
+      if (it) sectionOf.set(it, [kind, flag].filter(Boolean));
+    }
+  }
+
   const cards = items.map((el) => {
     el.classList.add('jt-item');
     const link = el.querySelector(SITE.link);
@@ -314,6 +337,20 @@
       (imgNode.closest('figure, picture, .issue-item__image') || imgNode).remove();
     }
 
+    const labels = sectionOf.get(el) || [];
+    if (labels.length) {
+      const row = document.createElement('div');
+      row.className = 'jt-badges';
+      for (const [i, txt] of labels.entries()) {
+        const b = document.createElement('span');
+        // the second label is the publisher's own emphasis (Hot Paper, VIP)
+        b.className = 'jt-badge' + (i ? ' jt-badge--flag' : '');
+        b.textContent = txt;
+        row.appendChild(b);
+      }
+      titleEl.parentElement.insertBefore(row, titleEl);
+    }
+
     titleEl.parentElement.insertBefore(ga, titleEl);
     titleEl.after(abs);
     if (nativeAbs) abs.textContent = nativeAbs;
@@ -325,6 +362,7 @@
       authors: [...el.querySelectorAll(SITE.authors)].map(a => a.textContent.trim()).filter(Boolean),
       date: el.querySelector(SITE.date)?.getAttribute?.('datetime')
         || el.querySelector(SITE.date)?.textContent.trim() || '',
+      labels,
       text: '',
     };
     card.pdfHref = SITE.pdf({ el, href, doi }) || '';
@@ -716,7 +754,8 @@
 
   // ------------------------------------------------------- filter + keywords
   function buildText(card) {
-    return [card.title, card.authors.join(' '), card.abs.textContent].join(' ').toLowerCase();
+    return [card.title, card.authors.join(' '), (card.labels || []).join(' '), card.abs.textContent]
+      .join(' ').toLowerCase();
   }
   const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const escapeHtml = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
