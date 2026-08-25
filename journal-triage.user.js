@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Journal Triage
 // @namespace    github.com/Wei952766
-// @version      2.4.0
+// @version      2.5.0
 // @description  Make journal listings scannable: multi-column grid, live filtering, keyword highlighting and one-click Zotero saving with the full-text PDF. Restores graphical abstracts and abstracts on ACS, which strips them. Works on ACS, Wiley and Nature. Bilingual EN/中文.
 // @author       Wei952766
 // @license      MIT
@@ -22,7 +22,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.4.0';
+  const VERSION = '2.5.0';
 
   // ------------------------------------------------------------------ sites
   // Each adapter describes where the parts of a listing live, and declares
@@ -33,15 +33,18 @@
     {
       id: 'acs',
       host: /(^|\.)pubs\.acs\.org$/,
-      item: 'div.al-article-box',
+      // ASAP and issue TOCs use different item markup; they never co-occur.
+      item: 'div.al-article-box, div.al-article-item-wrap',
       list: '.al-article-list-group',
-      title: 'h5.al-title',
-      link: 'h5.al-title a',
+      title: 'h5.al-title, h3.item-title',
+      link: 'h5.al-title a, h3.item-title a',
       authors: '.al-authors-list .wi-fullname',
       date: '.al-pub-date',
       actionBar: '.badge-bar .resource-links-info',
       abstract: { mode: 'fetch', sel: 'section.abstract' },
-      graphic: { mode: 'fetch', sel: '.graphical-abstract img' },
+      // Issue TOCs keep their graphical abstracts; only ASAP dropped them.
+      graphic: { mode: 'native', sel: '.issue-graphical-abstract img',
+        fetchSel: '.graphical-abstract img' },
       doi: ({ href }) => (href.match(/\/doi\/(10\.\d{4,9}\/[^/?#]+)/) || [])[1],
       pdf: ({ el }) => el.querySelector('a.article-pdfLink, a.al-link.pdf')?.getAttribute('href') || '',
       css: `
