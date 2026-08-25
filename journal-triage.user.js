@@ -213,16 +213,18 @@
   .jt-bar{position:sticky;top:0;z-index:900;display:flex;flex-wrap:wrap;gap:8px;align-items:center;
     padding:8px 12px;margin:0 0 14px;background:#fff;border:1px solid #d5d9e0;border-radius:8px;
     box-shadow:0 2px 6px rgba(0,0,0,.08);font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1a1a1a}
-  .jt-bar button{padding:4px 10px;border:1px solid #c3c9d2;border-radius:6px;background:#f7f8fa;cursor:pointer;font-size:12px;color:#1a1a1a}
+  .jt-bar button{flex:0 0 auto;width:auto;height:auto;margin:0;padding:4px 10px;border:1px solid #c3c9d2;border-radius:6px;background:#f7f8fa;cursor:pointer;font-size:12px;color:#1a1a1a}
   .jt-bar button.on{background:#00558c;border-color:#00558c;color:#fff}
-  .jt-bar input[type=text]{padding:4px 8px;border:1px solid #c3c9d2;border-radius:6px;font-size:12px;min-width:180px}
-  .jt-bar select{padding:4px 6px;border:1px solid #c3c9d2;border-radius:6px;background:#f7f8fa;font-size:12px;cursor:pointer}
+  .jt-bar input[type=text]{padding:4px 8px;border:1px solid #c3c9d2;border-radius:6px;font-size:12px;
+    min-width:180px;width:auto;flex:1 1 220px;height:auto;margin:0;display:inline-block;box-sizing:border-box}
+  .jt-bar select{padding:4px 6px;border:1px solid #c3c9d2;border-radius:6px;background:#f7f8fa;font-size:12px;
+    cursor:pointer;width:auto;flex:0 0 auto;height:auto;margin:0;display:inline-block;box-sizing:border-box}
   .jt-bar select:disabled{opacity:.45;cursor:default}
   .jt-bar .jt-count{margin-left:auto;color:#5a6472;font-size:12px;white-space:nowrap}
   .jt-bar .jt-sep{width:1px;height:20px;background:#dde1e6}
   .jt-kw-row{flex-basis:100%;display:none;gap:6px;align-items:center}
   .jt-kw-row.open{display:flex}
-  .jt-kw-row input{flex:1}
+  .jt-kw-row input{flex:1 1 auto;width:auto}
 
   body.jt-grid .jt-list{display:grid;gap:16px;
     grid-template-columns:var(--jt-cols, repeat(auto-fill, minmax(330px, 1fr)))}
