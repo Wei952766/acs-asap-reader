@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Journal Triage
 // @namespace    github.com/Wei952766
-// @version      2.5.1
+// @version      2.6.0
 // @description  Make journal listings scannable: multi-column grid, live filtering, keyword highlighting and one-click Zotero saving with the full-text PDF. Restores graphical abstracts and abstracts on ACS, which strips them. Works on ACS, Wiley and Nature. Bilingual EN/中文.
 // @author       Wei952766
 // @license      MIT
@@ -22,7 +22,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '2.5.1';
+  const VERSION = '2.6.0';
 
   // ------------------------------------------------------------------ sites
   // Each adapter describes where the parts of a listing live, and declares
@@ -42,8 +42,11 @@
       date: '.al-pub-date',
       actionBar: '.badge-bar .resource-links-info',
       abstract: { mode: 'fetch', sel: 'section.abstract' },
-      // Issue TOCs keep their graphical abstracts; only ASAP dropped them.
-      graphic: { mode: 'native', sel: '.issue-graphical-abstract img',
+      // ACS restored graphical abstracts to the ASAP listing on 2026-09-22, but
+      // under a different wrapper than the issue TOC uses. Fetching from the
+      // article page stays as the fallback for listings that still lack one.
+      graphic: { mode: 'native',
+        sel: '.featured-img-wrapper img, .issue-graphical-abstract img',
         fetchSel: '.graphical-abstract img' },
       doi: ({ href }) => (href.match(/\/doi\/(10\.\d{4,9}\/[^/?#]+)/) || [])[1],
       pdf: ({ el }) => el.querySelector('a.article-pdfLink, a.al-link.pdf')?.getAttribute('href') || '',
@@ -65,7 +68,8 @@
         /* issue TOCs float the item body with no width, so it collapses to one
            word per line once the card is a grid cell */
         body.jt-grid .jt-item .al-article-items { float: none; width: auto }
-        body.jt-grid .jt-item .issue-graphical-abstract { display: none }`,
+        body.jt-grid .jt-item .issue-graphical-abstract,
+        body.jt-grid .jt-item .featured-img-wrapper { display: none }`,
     },
     {
       id: 'wiley',
@@ -374,7 +378,7 @@
     }
     if (absNode) absNode.remove();
     if (imgNode && imgNode.isConnected) {
-      (imgNode.closest('figure, picture, .issue-item__image, .c-card__image, .issue-graphical-abstract') || imgNode).remove();
+      (imgNode.closest('figure, picture, .issue-item__image, .c-card__image, .issue-graphical-abstract, .featured-img-wrapper') || imgNode).remove();
     }
 
     const labels = sectionOf.get(el) || [];
