@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.6.0 — 2026-09-23
+
+项目更名为 **Journal Triage**，定位从「修 ACS 坏掉的列表页」转为
+「跨出版商的文献分诊层」。脚本文件为 `journal-triage.user.js`，
+旧的 `acs-asap-reader.user.js` 不再维护。
+
+- **新增 Wiley 与 Nature 支持**。站点适配器声明列表各部分位置及
+  **页面本身已提供什么**，缺的才抓。ACS 的 ASAP 页要抓摘要，
+  Wiley / Nature 两者都自带。
+- **新增 ACS 期目录支持**（`al-article-item-wrap`，与 ASAP 的标记不同）。
+- **分段合并为连续网格**：出版商的 RESEARCH ARTICLE / COMMUNICATION / 日期批次
+  不再切断网格，标题折叠成卡片徽章（含 HOT PAPER、VERY IMPORTANT PAPER）。
+- 解除各家的内容栏宽度锁并收起推广栏；每家条目内部的布局冲突在各自适配器
+  的 CSS 里单独驯服（ACS 期目录的 `float:left; width:0`、Nature 的
+  `flex-flow:row-reverse`）。
+- 沿用 1.5.0 对 ACS 恢复图摘的适配。
+
 ## 1.5.0 — 2026-09-23
 
 - **修复 ACS 恢复图摘后出现的重复图片**。ACS 于 2026-09-22 把 graphical abstract
