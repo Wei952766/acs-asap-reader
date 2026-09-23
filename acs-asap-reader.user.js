@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ACS ASAP Reader
 // @namespace    github.com/Wei952766
-// @version      1.4.0
+// @version      1.5.0
 // @description  Restore graphical abstracts + inline abstracts on ACS (JACS etc.) ASAP / TOC / search list pages, with compact view, keyword filter, highlight, one-click Zotero save (with full-text PDF) and a bilingual (EN/中文) UI.
 // @author       Wei952766
 // @license      MIT
@@ -153,6 +153,8 @@
   .asap-ga{margin:2px 0 6px;min-height:4px}
   .asap-ga img{width:100%;max-height:220px;object-fit:contain;background:#fafbfc;border:1px solid #eceff2;border-radius:6px;cursor:zoom-in}
   .asap-ga.asap-empty{display:none}
+  .al-article-box .featured-img-wrapper,
+  .al-article-box .issue-graphical-abstract{display:none}
   .asap-abs{font-size:12px;line-height:1.5;color:#3c4450;margin:6px 0 2px;
     max-height:6.4em;overflow:hidden;position:relative;cursor:pointer}
   .asap-abs.open{max-height:none}
@@ -314,13 +316,24 @@
     ga.className = 'asap-ga asap-empty';
     box.querySelector('.al-article-items').insertBefore(ga, box.querySelector('h5.al-title'));
 
+    // ACS put graphical abstracts back on the listing on 2026-09-22. Adopt the
+    // one the page already has instead of fetching and drawing a second copy.
+    const nativeImg = box.querySelector('.featured-img-wrapper img, .issue-graphical-abstract img');
+    const nativeGa = nativeImg
+      ? new URL(nativeImg.getAttribute('src') || '', location.origin).href : '';
+    if (nativeGa) {
+      ga.classList.remove('asap-empty');
+      ga.appendChild(mkNativeImage(nativeGa));
+      (nativeImg.closest('.featured-img-wrapper, .issue-graphical-abstract') || nativeImg).remove();
+    }
+
     const abs = document.createElement('div');
     abs.className = 'asap-abs';
     abs.addEventListener('click', () => abs.classList.toggle('open'));
     (box.querySelector('.al-authors-list') || box.querySelector('h5.al-title')).after(abs);
 
     return {
-      box, href, doi, ga, abs, text: '', loaded: false,
+      box, href, doi, ga, abs, text: '', loaded: false, hasNativeGa: !!nativeGa,
       title: link.textContent.replace(/\s+/g, ' ').trim(),
       authors: [...box.querySelectorAll('.al-authors-list .wi-fullname')].map(s => s.textContent.trim()),
       date: box.querySelector('.al-pub-date')?.textContent.trim() || '',
@@ -358,8 +371,10 @@
     const hit = cache[card.doi];
     if (cacheValid(hit)) { render(card, hit); return; }
 
-    card.ga.classList.remove('asap-empty');
-    card.ga.innerHTML = '<span class="asap-spin"></span>';
+    if (!card.hasNativeGa) {
+      card.ga.classList.remove('asap-empty');
+      card.ga.innerHTML = '<span class="asap-spin"></span>';
+    }
     try {
       const res = await fetch(card.href, { credentials: 'include' });
       if (!res.ok) throw new Error(res.status);
@@ -374,13 +389,24 @@
       cache[card.doi] = entry; cacheDirty = true; flushCache();
       render(card, entry);
     } catch (err) {
-      card.ga.classList.add('asap-empty');
-      card.ga.innerHTML = '';
+      if (!card.hasNativeGa) { card.ga.classList.add('asap-empty'); card.ga.innerHTML = ''; }
     }
   }
 
+  function mkNativeImage(src) {
+    const im = new Image();
+    im.loading = 'lazy';
+    im.src = src;
+    im.alt = 'Graphical abstract';
+    im.addEventListener('click', () => lightbox(src));
+    im.addEventListener('error', () => im.parentElement?.classList.add('asap-empty'));
+    return im;
+  }
+
   function render(card, entry) {
-    if (entry.ga) {
+    if (card.hasNativeGa) {
+      // keep the adopted image; only the abstract comes from the fetch
+    } else if (entry.ga) {
       card.ga.classList.remove('asap-empty');
       card.ga.innerHTML = '';
       const im = new Image();
